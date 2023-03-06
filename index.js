@@ -53,7 +53,6 @@ async function handleRequest(request) {
 addEventListener("fetch", (event) => {
   event.respondWith(handleRequest(event.request));
 });
-
 function getMeta(id, type) {
   var [tt, s, e] = id.split(":");
 
@@ -78,175 +77,63 @@ async function searchDrive(id, type) {
     //orderBy: "quotaBytesUsed desc",
     pageSize: 1000,
     supportsAllDrives: true,
-    fields: "files(id,name,size,driveId,md5Checksum)",
-  };
-
-  var queryString = Object.entries(queryParams)
-    .map(([key, value]) => `${key}=${value}`)
-    .join("&");
-
-  await refreshToken();
-
-  var results = await fetch(
-    "https://content.googleapis.com/drive/v3/files?" + queryString,
-    {
-      json: true,
-      headers: {
-        Authorization: "Bearer " + credentials.token,
-      },
-    }
-  )
-    .then((res) => res.json())
-    .then((json) => {
-      json.files.sort((a, b) => -1 * (a.size - b.size));
-      return json;
-    })
-    .then((json) =>
-      json.files.map((x) => {
-        var name = ("GDrive " + getQuality(x.name)).trim();
-        var title = `${x.name}\n${getSize(x.size)}\n${getCodec(x.name)}`.trim();
-        //var url = `${proxyURL}/load/${x.id}`;
-        var url = `https://www.googleapis.com/drive/v3/files/${x.id}?alt=media`;
-
-        return {
-          title,
-          name,
-          url,
-          behaviorHints: {
-            notWebReady: true,
-            proxyHeaders: {
-              request: {
-                Accept: "application/json",
-                Authorization: "Bearer " + credentials.token,
-              },
-            },
-          },
-        };
-      })
-    )
-    .then((results) => {
-      if (results.length == 0) {
-        return [
-          { name: "GDrive", title: "(404) No results", externalUrl: "/" },
-        ];
-      }
-      return results;
-    });
-
-  return results;
-}
-
-async function createQ(id, type) {
-  var { name, year } = await getMeta(id, type);
-
-  var q =
-    "trashed=false and mimeType contains 'video/' and not name contains 'trailer' and not name contains 'sample'";
-
-  name.split(" ").forEach((x) => {
-    q += " and ";
-    if (x.includes("'")) {
-      q += `(name contains '${x.replace(
-        "'",
-        ""
-      )}' or name contains '${x.replace("'", "\\'")}')`;
-    } else {
-      q += `name contains '${x}'`;
-    }
-  });
-
-  if (type == "movie") {
-    q += ` and fullText contains '${year}'`;
+    fields: "files(id,name,size,driveId,md5Checksum
+function getSize(size) {
+  if (size >= 1099511627776) {
+    size = (size / 1099511627776).toFixed(2) + " TB";
+  } else if (size >= 1073741824) {
+    size = (size / 1073741824).toFixed(2) + " GB";
+  } else if (size >= 1048576) {
+    size = (size / 1048576).toFixed(2) + " MB";
+  } else if (size >= 1024) {
+    size = (size / 1024).toFixed(2) + " KB";
   } else {
-    var [tt, s, e] = id.split(":");
-
-    var formatting = [[`${s}x${e}`], [`s${s}e${e}`], [`s${s}`, `e${e}`]];
-
-    var seasonIsTwoDigit = parseInt(s) > 9;
-    var episideIsTwoDigit = parseInt(e) > 9;
-
-    if (!episideIsTwoDigit) formatting.push([`${s}x0${e}`]);
-    if (!seasonIsTwoDigit && !episideIsTwoDigit) {
-      formatting.push([`s0${s}e0${e}`]);
-      formatting.push([`s0${s}`, `e0${e}`]);
-    }
-    if (seasonIsTwoDigit && !episideIsTwoDigit) {
-      formatting.push([`s${s}e0${e}`]);
-      formatting.push([`s${s}`, `e0${e}`]);
-    }
-    if (!seasonIsTwoDigit && episideIsTwoDigit) {
-      formatting.push([`s0${s}e${e}`]);
-      formatting.push([`s0${s}`, `e${e}`]);
-    }
-
-    q += ` and (${formatting
-      .map(
-        (format) =>
-          `(${format.map((f) => `name contains '${f}'`).join(" and ")})`
-      )
-      .join(" or ")})`;
+    size = size + " B";
   }
 
-  return q;
-}
-
-function getSize(size) {
-  var gb = 1024 * 1024 * 1024;
-  var mb = 1024 * 1024;
-
-  return (
-    "💾 " +
-    (size / gb > 1
-      ? `${(size / gb).toFixed(2)} GB`
-      : `${(size / mb).toFixed(2)} MB`)
-  );
+  return size;
 }
 
 function getQuality(name) {
-  name = name.toLowerCase();
+  var match = /([0-9]{3,4})p/.exec(name);
 
-  if (["2160", "4k", "uhd"].filter((x) => name.includes(x)).length > 0)
-    return "4k";
-  if (["1080", "fhd"].filter((x) => name.includes(x)).length > 0) return "FHD";
-  if (["720", "hd"].filter((x) => name.includes(x)).length > 0) return "HD";
-  if (["480p", "380p", "sd"].filter((x) => name.includes(x)).length > 0)
-    return "SD";
-  return "";
+  if (match) {
+    return match[1];
+  } else {
+    return "unknown";
+  }
 }
 
 function getCodec(name) {
-  name = name.toLowerCase();
+  var match = /\.([a-zA-Z0-9]{3,4})$/.exec(name);
 
-  var codec = "";
-
-  if (name.includes("sdr")) codec += "🌺";
-  if (
-    ["hevc", "h255", "h.265", "x.265", "x265"].filter((x) => name.includes(x))
-      .length > 0
-  )
-    codec += "🌈 x265 ";
-
-  return codec;
-}
-
-function refreshToken() {
-  if (
-    !credentials.token ||
-    parseInt(new Date() - credentials.created) >= 3600 * 1000
-  ) {
-    return fetch("https://www.googleapis.com/oauth2/v4/token", {
-      body: JSON.stringify({
-        client_id: credentials["client_id"],
-        client_secret: credentials["client_secret"],
-        refresh_token: credentials["refresh_token"],
-        grant_type: "refresh_token",
-      }),
-      method: "POST",
-    })
-      .then((res) => res.json())
-      .then((json) => {
-        credentials.token = json["access_token"];
-        credentials.created = new Date();
-      });
+  if (match) {
+    return match[1].toUpperCase();
+  } else {
+    return "";
   }
 }
-startServer();
+
+async function refreshToken() {
+  if (Date.now() < credentials.expiry_date) {
+    return;
+  }
+
+  var params = new URLSearchParams();
+  params.append("client_id", credentials.client_id);
+  params.append("client_secret", credentials.client_secret);
+  params.append("refresh_token", credentials.refresh_token);
+  params.append("grant_type", "refresh_token");
+
+  var res = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    body: params,
+  });
+
+  var json = await res.json();
+
+  credentials.token = json.access_token;
+  credentials.expiry_date = Date.now() + json.expires_in * 1000 - 30000;
+}
+
+
