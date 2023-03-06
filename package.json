@@ -1,11 +1,17 @@
 {
-  "name": "Gdrive-Test",
+  "name": "Gdrive-Tes",
   "version": "1.0.0",
-  "description": "",
+  "description": "Updated Gdrive Addon",
   "main": "index.js",
-  "dependencies": {},
-  "devDependencies": {},
-  "scripts": {},
-  "author": "MikMc",
-  "license": "ISC"
+  "scripts": {
+    "start": "node index.js",
+    "test": "jest"
+  },
+  "dependencies": {
+    "express": "^4.17.1",
+    "mongoose": "^6.2.1"
+  },
+  "devDependencies": {
+    "jest": "^27.4.3"
+  }
 }
