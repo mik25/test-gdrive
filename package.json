@@ -1,0 +1,11 @@
+{
+  "name": "Gdrive-Test",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "dependencies": {},
+  "devDependencies": {},
+  "scripts": {},
+  "author": "MikMc",
+  "license": "ISC"
+}
